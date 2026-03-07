@@ -1,0 +1,2 @@
+This is a test file for the DROPZONE application.
+It contains some text to verify the transmission works as expected.
