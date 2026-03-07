@@ -8,6 +8,9 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust Proxy (Required for many hosting providers like Vercel, Heroku, etc.)
+app.set('trust proxy', 1);
+
 // Security & Performance Middleware
 app.use(helmet());
 app.use(compression());
@@ -18,15 +21,19 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Rate Limiting
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again after 15 minutes'
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 const uploadLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // limit each IP to 10 uploads per hour
-  message: { error: 'Upload limit reached. Please try again in an hour.' }
+  windowMs: 60 * 60 * 1000,
+  max: 20, // Increased slightly for better UX
+  message: { error: 'Upload limit reached. Please try again in an hour.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Apply global limiter

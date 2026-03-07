@@ -1175,11 +1175,23 @@
         const iconSvg = dropZone.querySelector('.icon-circle svg');
         iconSvg.style.animation = 'float-particle 1s infinite alternate';
 
-        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const res = await fetch('upload', { method: 'POST', body: formData });
+
+        // Robust Error Handling
+        if (!res.ok) {
+          let errorMsg = 'Upload failed';
+          try {
+            const data = await res.json();
+            errorMsg = data.error || errorMsg;
+          } catch (e) {
+            // If not JSON, try reading as text
+            const text = await res.text();
+            errorMsg = text.substring(0, 100) || errorMsg;
+          }
+          throw new Error(errorMsg);
+        }
+
         const data = await res.json();
-
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
-
         showUploadSuccess(data.code, data.filename, data.size, data.expires);
 
       } catch (err) {
@@ -1305,10 +1317,17 @@
 
       try {
         // Trigger download via fetch to handle errors gracefully manually, then download blob
-        const res = await fetch(`/download/${code}`);
+        const res = await fetch(`download/${code}`);
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Download failed');
+          let errorMsg = 'Download failed';
+          try {
+            const err = await res.json();
+            errorMsg = err.error || errorMsg;
+          } catch (e) {
+            const text = await res.text();
+            errorMsg = text.substring(0, 100) || errorMsg;
+          }
+          throw new Error(errorMsg);
         }
 
         const blob = await res.blob();
