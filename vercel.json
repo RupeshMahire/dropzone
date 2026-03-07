@@ -2,32 +2,20 @@
     "version": 2,
     "rewrites": [
         {
-            "source": "/(.*).html",
-            "destination": "/public/$1.html"
-        },
-        {
-            "source": "/(.*).css",
-            "destination": "/public/$1.css"
-        },
-        {
-            "source": "/(.*).js",
-            "destination": "/public/$1.js"
-        },
-        {
             "source": "/upload",
             "destination": "/server.js"
         },
         {
-            "source": "/download/(.*)",
+            "source": "/download/:path*",
             "destination": "/server.js"
         },
         {
-            "source": "/status/(.*)",
+            "source": "/status/:path*",
             "destination": "/server.js"
         },
         {
-            "source": "/",
-            "destination": "/public/index.html"
+            "source": "/(.*)",
+            "destination": "/public/$1"
         }
     ]
 }

@@ -186,6 +186,12 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[READY] DROPZONE Server running on PORT ${PORT}`);
-});
+// Local server startup (only if run directly)
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[READY] DROPZONE Server running on PORT ${PORT}`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;
