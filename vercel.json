@@ -2,16 +2,8 @@
     "version": 2,
     "rewrites": [
         {
-            "source": "/upload",
-            "destination": "/server.js"
-        },
-        {
-            "source": "/download/:path*",
-            "destination": "/server.js"
-        },
-        {
-            "source": "/status/:path*",
-            "destination": "/server.js"
+            "source": "/api/(.*)",
+            "destination": "/api/index.js"
         },
         {
             "source": "/(.*)",

@@ -63,8 +63,8 @@ function generateSafeCode() {
   return code;
 }
 
-// POST /upload - Upload a file
-app.post('/upload', uploadLimiter, upload.single('file'), (req, res) => {
+// POST /api/upload - Upload a file
+app.post('/api/upload', uploadLimiter, upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -96,8 +96,8 @@ app.post('/upload', uploadLimiter, upload.single('file'), (req, res) => {
   }
 });
 
-// GET /status/:code - Get remaining TTL for a code
-app.get('/status/:code', (req, res) => {
+// GET /api/status/:code - Get remaining TTL for a code
+app.get('/api/status/:code', (req, res) => {
   const code = req.params.code.toUpperCase();
   const fileData = files.get(code);
 
@@ -116,8 +116,8 @@ app.get('/status/:code', (req, res) => {
   res.json({ expires: remainingSeconds });
 });
 
-// GET /download/:code - Download a file and immediately destroy it
-app.get('/download/:code', (req, res) => {
+// GET /api/download/:code - Download a file and immediately destroy it
+app.get('/api/download/:code', (req, res) => {
   const code = req.params.code.toUpperCase();
   const fileData = files.get(code);
 

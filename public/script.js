@@ -115,7 +115,7 @@ async function uploadFile(file) {
         const iconSvg = dropZone.querySelector('.icon-circle svg');
         iconSvg.style.animation = 'float-particle 1s infinite alternate';
 
-        const res = await fetch('upload', { method: 'POST', body: formData });
+        const res = await fetch('api/upload', { method: 'POST', body: formData });
 
         // Robust Error Handling
         if (!res.ok) {
@@ -258,7 +258,7 @@ async function triggerReceive() {
 
     try {
         // Trigger download via fetch to handle errors gracefully manually, then download blob
-        const res = await fetch(`download/${code}`);
+        const res = await fetch(`api/download/${code}`);
         if (!res.ok) {
             let errorMsg = 'Download failed';
             const resClone = res.clone();
