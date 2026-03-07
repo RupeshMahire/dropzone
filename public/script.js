@@ -1,330 +1,365 @@
-// ----- Particles Generator -----
-const particlesContainer = document.getElementById('particles');
-for (let i = 0; i < 25; i++) {
-    const p = document.createElement('div');
-    p.className = 'particle';
-    const size = Math.random() * 5 + 3; // 3-8px
-    p.style.width = `${size}px`;
-    p.style.height = `${size}px`;
-    p.style.left = `${Math.random() * 100}%`;
-    p.style.top = `${Math.random() * 100}%`;
-    p.style.animationDuration = `${Math.random() * 12 + 8}s`; // 8-20s
-    p.style.animationDelay = `${Math.random() * 10}s`;
-    p.style.opacity = Math.random() * 0.4 + 0.2; // 0.2 - 0.6
-    particlesContainer.appendChild(p);
-}
+// --- SUPABASE CONFIGURATION ---
+// Replace these with your actual Supabase project credentials
+const SUPABASE_URL = 'https://ltdnhicqdrkzioyzudri.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0ZG5oaWNxZHJremlveXp1ZHJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NjUxOTYsImV4cCI6MjA4ODQ0MTE5Nn0.44XwDCrxSeUWb0a9CwaE8QrujrB6TMTH_ZbWpixDoEY';
 
-// ----- Responsive UI Setup -----
-const btnSendModes = document.querySelectorAll('.btn-send-mode');
-const btnRecvModes = document.querySelectorAll('.btn-recv-mode');
-const panelSend = document.getElementById('panel-send');
-const panelRecv = document.getElementById('panel-recv');
-const mobileNav = document.getElementById('mobile-nav');
-const hamburgerBtn = document.getElementById('hamburger-btn');
+// Initialize Supabase Client
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-hamburgerBtn.addEventListener('click', () => {
-    mobileNav.classList.toggle('open');
-    hamburgerBtn.classList.toggle('open');
-});
+// State
+let isPhoneMode = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
+let currentCode = null;
+let currentTimer = null;
+const TTL_SECONDS = 600;
 
-function switchMode(mode) {
-    if (mode === 'send') {
-        btnSendModes.forEach(btn => btn.classList.add('active'));
-        btnRecvModes.forEach(btn => btn.classList.remove('active'));
-        panelSend.classList.add('active');
-        panelRecv.classList.remove('active');
-    } else {
-        btnRecvModes.forEach(btn => btn.classList.add('active'));
-        btnSendModes.forEach(btn => btn.classList.remove('active'));
-        panelRecv.classList.add('active');
-        panelSend.classList.remove('active');
-        // Auto focus first digit
-        setTimeout(() => document.getElementById('d1').focus(), 100);
-    }
-    mobileNav.classList.remove('open');
-    hamburgerBtn.classList.remove('open');
-}
-
-btnSendModes.forEach(btn => btn.addEventListener('click', () => switchMode('send')));
-btnRecvModes.forEach(btn => btn.addEventListener('click', () => switchMode('recv')));
-
-// Auto detect mobile to default to receive
-if (window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent)) {
-    switchMode('recv');
-}
-
-// ----- Formatting Utils -----
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-function formatTime(sec) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-// ----- SEND FILE LOGIC -----
+// DOM Elements
+const body = document.body;
+const btnPc = document.getElementById('btn-pc');
+const btnPhone = document.getElementById('btn-phone');
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
-const uploadState = document.getElementById('send-upload-state');
-const codeState = document.getElementById('send-code-state');
+const sendDetails = document.getElementById('send-details');
+const codeDisplay = document.getElementById('code-display');
+const filenameDisplay = document.getElementById('filename-display');
+const timeRing = document.getElementById('time-ring');
+const timeText = document.getElementById('time-text');
+const receiveZone = document.getElementById('receive-zone');
+const codeInputs = document.querySelectorAll('.code-input input');
+const btnReceive = document.getElementById('btn-receive');
+const errorMsg = document.getElementById('error-msg');
 
-// Drag & Drop
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
-    dropZone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); });
-});
+// Initialization
+function init() {
+    createParticles();
+    setMode(isPhoneMode);
 
-['dragenter', 'dragover'].forEach(ev => {
-    dropZone.addEventListener(ev, () => dropZone.classList.add('dragover'));
-});
+    // Event Listeners
+    btnPc.addEventListener('click', () => setMode(false));
+    btnPhone.addEventListener('click', () => setMode(true));
 
-['dragleave', 'drop'].forEach(ev => {
-    dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover'));
-});
+    // Upload Listeners
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--text-glow)'; });
+    dropZone.addEventListener('dragleave', () => dropZone.style.borderColor = 'rgba(255, 255, 255, 0.2)');
+    dropZone.addEventListener('drop', handleDrop);
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    });
 
-dropZone.addEventListener('drop', (e) => {
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        uploadFile(e.dataTransfer.files[0]);
+    // Download Listeners
+    codeInputs.forEach((input, index) => {
+        input.addEventListener('input', (e) => handleCodeInput(e, index));
+        input.addEventListener('keydown', (e) => handleCodeBackspace(e, index));
+        input.addEventListener('paste', handleCodePaste);
+    });
+    btnReceive.addEventListener('click', triggerReceive);
+}
+
+// Visuals
+function createParticles() {
+    const defaultParticleCount = isPhoneMode ? 15 : 30;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const count = prefersReducedMotion ? 5 : defaultParticleCount;
+
+    for (let i = 0; i < count; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.left = Math.random() * 100 + 'vw';
+        p.style.top = Math.random() * 100 + 'vh';
+        p.style.animationDuration = (Math.random() * 10 + 10) + 's';
+        p.style.animationDelay = (Math.random() * -20) + 's';
+        body.appendChild(p);
     }
-});
+}
 
-dropZone.addEventListener('click', () => fileInput.click());
-
-fileInput.addEventListener('change', (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-        uploadFile(e.target.files[0]);
+function setMode(toPhone) {
+    isPhoneMode = toPhone;
+    if (isPhoneMode) {
+        btnPhone.classList.add('active');
+        btnPc.classList.remove('active');
+        dropZone.classList.add('hidden');
+        sendDetails.classList.add('hidden');
+        receiveZone.classList.remove('hidden');
+        // Focus first input on phone mode if not mobile (prevents keyboard pop on actual mobile)
+        if (window.innerWidth > 768) codeInputs[0].focus();
+    } else {
+        btnPc.classList.add('active');
+        btnPhone.classList.remove('active');
+        receiveZone.classList.add('hidden');
+        if (currentCode) {
+            sendDetails.classList.remove('hidden');
+        } else {
+            dropZone.classList.remove('hidden');
+        }
     }
-});
+    errorMsg.classList.add('hidden');
+}
 
-let currentInterval = null;
+// Generate 4 digit collision resistant code
+function generateCode() {
+    const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 4; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
 
-async function uploadFile(file) {
+// --- CORE LOGIC: SUPABASE UPLOAD ---
+function handleDrop(e) {
+    e.preventDefault();
+    dropZone.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+    if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+    }
+}
+
+async function handleFile(file) {
     if (file.size > 50 * 1024 * 1024) {
-        alert("File too large. Max 50MB.");
+        alert("File extremely large. Max 50MB.");
+        return;
+    }
+
+    if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+        alert("Supabase is not configured! Please set your URL and ANON_KEY in script.js");
         return;
     }
 
     try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        // Show loading state implicitly on drop zone icon
+        // Show loading state
         const iconSvg = dropZone.querySelector('.icon-circle svg');
         iconSvg.style.animation = 'float-particle 1s infinite alternate';
 
-        const res = await fetch('api/upload', { method: 'POST', body: formData });
+        const code = generateCode();
+        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
+        const filePath = `${code}-${Math.random().toString(36).substring(7)}-${safeName}`;
 
-        // Robust Error Handling
-        if (!res.ok) {
-            let errorMsg = 'Upload failed';
-            const resClone = res.clone(); // Clone to allow double reading
-            try {
-                const data = await res.json();
-                errorMsg = data.error || errorMsg;
-            } catch (e) {
-                // Read from clone since original stream is consumed
-                const text = await resClone.text();
-                errorMsg = text.substring(0, 100) || errorMsg;
-            }
-            throw new Error(errorMsg);
-        }
+        // 1. Upload file to Supabase Storage (Bucket name: 'dropzone')
+        const { data: storageData, error: storageError } = await supabase.storage
+            .from('dropzone')
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
 
-        const data = await res.json();
-        showUploadSuccess(data.code, data.filename, data.size, data.expires);
+        if (storageError) throw new Error("Storage Upload Failed: " + storageError.message);
+
+        // 2. Insert metadata into Supabase Database (Table: 'files')
+        const expiresAt = new Date(Date.now() + TTL_SECONDS * 1000).toISOString();
+        const { error: dbError } = await supabase
+            .from('files')
+            .insert([
+                {
+                    code: code,
+                    file_path: filePath,
+                    filename: file.name,
+                    expires_at: expiresAt
+                }
+            ]);
+
+        if (dbError) throw new Error("Database Logic Failed: " + dbError.message);
+
+        showUploadSuccess(code, file.name, file.size, TTL_SECONDS);
 
     } catch (err) {
         alert("Upload error: " + err.message);
-    } finally {
         const iconSvg = dropZone.querySelector('.icon-circle svg');
-        iconSvg.style.animation = '';
+        iconSvg.style.animation = 'none';
     }
 }
 
-function showUploadSuccess(code, filename, size, ttl) {
-    uploadState.style.display = 'none';
-    codeState.style.display = 'flex';
+function showUploadSuccess(code, filename, size, startTtl) {
+    currentCode = code;
+    dropZone.classList.add('hidden');
+    sendDetails.classList.remove('hidden');
 
-    document.getElementById('sent-file-info').textContent = `${filename} (${formatBytes(size)})`;
-
-    // Animate code boxes
-    const boxes = document.querySelectorAll('.code-digit');
-    for (let i = 0; i < 4; i++) {
-        boxes[i].textContent = code[i];
-        boxes[i].classList.remove('drop-in');
-
-        // Trigger reflow
-        void boxes[i].offsetWidth;
-
-        boxes[i].style.animationDelay = `${i * 0.1}s`;
-        boxes[i].classList.add('drop-in');
+    // Staggered animation for code digits
+    codeDisplay.innerHTML = '';
+    for (let i = 0; i < code.length; i++) {
+        const span = document.createElement('span');
+        span.className = 'digit dropped';
+        span.textContent = code[i];
+        span.style.animationDelay = (i * 0.1) + 's';
+        codeDisplay.appendChild(span);
     }
 
-    // Countdown loop
-    let maxTime = ttl;
-    let timeLeft = ttl;
+    filenameDisplay.textContent = `${filename} (${(size / 1024 / 1024).toFixed(2)} MB)`;
 
-    const circle = document.getElementById('countdown-circle');
-    const timeTxt = document.getElementById('countdown-text');
-    const warnTxt = document.getElementById('warning-time');
+    startTimer(startTtl);
+}
 
-    circle.style.strokeDashoffset = '0';
-    timeTxt.textContent = formatTime(timeLeft);
-    warnTxt.textContent = formatTime(timeLeft);
+function startTimer(secondsLeft) {
+    if (currentTimer) clearInterval(currentTimer);
 
-    if (currentInterval) clearInterval(currentInterval);
+    let left = secondsLeft;
+    const total = 600; // 10 minutes max visually
 
-    currentInterval = setInterval(() => {
-        timeLeft--;
-        if (timeLeft <= 0) {
-            clearInterval(currentInterval);
-            timeTxt.textContent = "0:00";
-            warnTxt.textContent = "0:00";
-            circle.style.strokeDashoffset = '176';
+    const updateRing = () => {
+        if (left <= 0) {
+            clearInterval(currentTimer);
+            timeText.textContent = "0:00";
+            timeRing.style.strokeDashoffset = 283;
+            timeRing.style.stroke = '#ff3366';
+            filenameDisplay.textContent = "Expired. Please upload again.";
+            filenameDisplay.style.color = '#ff3366';
+            currentCode = null;
             return;
         }
 
-        timeTxt.textContent = formatTime(timeLeft);
-        warnTxt.textContent = formatTime(timeLeft);
+        const mins = Math.floor(left / 60);
+        const secs = left % 60;
+        timeText.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
 
-        const offset = 176 - (timeLeft / maxTime) * 176;
-        circle.style.strokeDashoffset = offset;
+        // Ring math: max dasharray is ~283 (2 * pi * 45)
+        const offset = 283 - (left / total) * 283;
+        timeRing.style.strokeDashoffset = offset;
 
-    }, 1000);
+        if (left < 60) timeRing.style.stroke = '#ff3366';
+
+        left--;
+    };
+
+    updateRing();
+    currentTimer = setInterval(updateRing, 1000);
 }
 
-function resetSendFlow() {
-    if (currentInterval) clearInterval(currentInterval);
-    fileInput.value = '';
-    uploadState.style.display = 'flex';
-    codeState.style.display = 'none';
+// --- CORE LOGIC: SUPABASE DOWNLOAD ---
+function handleCodeInput(e, index) {
+    const val = e.target.value.toUpperCase();
+    e.target.value = val.replace(/[^A-Z0-9]/g, '');
+
+    if (e.target.value && index < 3) {
+        codeInputs[index + 1].focus();
+    }
+    checkReceiveReady();
 }
 
+function handleCodeBackspace(e, index) {
+    if (e.key === 'Backspace' && !e.target.value && index > 0) {
+        codeInputs[index - 1].focus();
+        codeInputs[index - 1].value = '';
+    }
+    checkReceiveReady();
+}
 
-// ----- RECEIVE FILE LOGIC -----
-const inputs = [
-    document.getElementById('d1'),
-    document.getElementById('d2'),
-    document.getElementById('d3'),
-    document.getElementById('d4')
-];
-const btnReceive = document.getElementById('btn-receive');
-const recvInputState = document.getElementById('recv-input-state');
-const recvSuccessState = document.getElementById('recv-success-state');
-const errorMsg = document.getElementById('recv-error');
-
-// Auto advance inputs
-inputs.forEach((input, index) => {
-    input.addEventListener('input', (e) => {
-        input.value = input.value.toUpperCase();
-        if (input.value && index < 3) {
-            inputs[index + 1].focus();
+function handleCodePaste(e) {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData).getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 4);
+    for (let i = 0; i < pasted.length; i++) {
+        if (i < 4) {
+            codeInputs[i].value = pasted[i];
+            if (i < 3) codeInputs[i + 1].focus();
         }
-    });
+    }
+    checkReceiveReady();
+}
 
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Backspace' && !input.value && index > 0) {
-            inputs[index - 1].focus();
-        } else if (e.key === 'Enter') {
-            triggerReceive();
-        }
-    });
-
-    // Paste support
-    input.addEventListener('paste', (e) => {
-        e.preventDefault();
-        const text = (e.clipboardData || window.clipboardData).getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (text.length >= 4) {
-            inputs[0].value = text[0];
-            inputs[1].value = text[1];
-            inputs[2].value = text[2];
-            inputs[3].value = text[3];
-            inputs[3].focus();
-        }
-    });
-});
-
-btnReceive.addEventListener('click', triggerReceive);
+function checkReceiveReady() {
+    const code = Array.from(codeInputs).map(i => i.value).join('');
+    btnReceive.disabled = code.length !== 4;
+}
 
 async function triggerReceive() {
-    const code = inputs.map(i => i.value).join('');
-    if (code.length < 4) return;
+    const code = Array.from(codeInputs).map(i => i.value).join('');
+    if (code.length !== 4) return;
 
-    errorMsg.textContent = "";
-    btnReceive.innerHTML = '<span class="loader">&middot;&middot;&middot;</span>';
+    if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+        showError("Supabase is not configured yet.");
+        return;
+    }
+
+    errorMsg.classList.add('hidden');
+    btnReceive.textContent = 'CONNECTING...';
     btnReceive.disabled = true;
 
     try {
-        // Trigger download via fetch to handle errors gracefully manually, then download blob
-        const res = await fetch(`api/download/${code}`);
-        if (!res.ok) {
-            let errorMsg = 'Download failed';
-            const resClone = res.clone();
-            try {
-                const err = await res.json();
-                errorMsg = err.error || errorMsg;
-            } catch (e) {
-                const text = await resClone.text();
-                errorMsg = text.substring(0, 100) || errorMsg;
-            }
-            throw new Error(errorMsg);
+        // 1. Fetch metadata from Supabase database
+        const { data: fileRecords, error: dbError } = await supabase
+            .from('files')
+            .select('*')
+            .eq('code', code);
+
+        if (dbError) throw new Error(dbError.message);
+        if (!fileRecords || fileRecords.length === 0) throw new Error("Code not found or expired.");
+
+        const record = fileRecords[0];
+
+        // 2. Check if expired
+        if (new Date(record.expires_at) < new Date()) {
+            throw new Error("This code has expired.");
         }
 
-        const blob = await res.blob();
+        // 3. Download from Supabase Storage using signed URL
+        const { data: urlData, error: urlError } = await supabase.storage
+            .from('dropzone')
+            .createSignedUrl(record.file_path, 60, {
+                download: record.filename
+            });
 
-        // Use regex to try to extract filename from Content-Disposition header
-        let filename = 'dropzone-file';
-        const disposition = res.headers.get('Content-Disposition');
-        if (disposition && disposition.indexOf('filename=') !== -1) {
-            const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
-            if (matches != null && matches[1]) {
-                filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
-            }
-        }
+        if (urlError) throw new Error("Failed to generate download link.");
 
-        // Trigger blob download
-        const url = window.URL.createObjectURL(blob);
+        // Trigger the file download in the browser
         const a = document.createElement('a');
         a.style.display = 'none';
-        a.href = url;
-        a.download = filename;
+        a.href = urlData.signedUrl;
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
 
         showReceiveSuccess();
 
+        // 4. (Optional) Cleanup: Delete the record so it's a one-time download
+        await supabase.from('files').delete().eq('code', code);
+        await supabase.storage.from('dropzone').remove([record.file_path]);
+
     } catch (err) {
-        errorMsg.textContent = "Invalid or expired code. Try again.";
-        inputs.forEach(i => {
-            i.classList.remove('invalid-shake');
-            void i.offsetWidth; // reflow
-            i.classList.add('invalid-shake');
-        });
-        btnReceive.innerHTML = 'RECEIVE FILE';
-        btnReceive.disabled = false;
-        inputs[0].focus();
+        showError(err.message);
+    } finally {
+        btnReceive.textContent = 'RECEIVE FILE';
+        checkReceiveReady();
     }
 }
 
 function showReceiveSuccess() {
-    recvInputState.style.display = 'none';
-    recvSuccessState.style.display = 'flex';
-    btnReceive.innerHTML = 'RECEIVE FILE';
-    btnReceive.disabled = false;
-    inputs.forEach(i => i.value = '');
+    body.style.animation = 'screen-pulse 0.5s ease-out';
+    setTimeout(() => { body.style.animation = ''; }, 500);
 
-    // Screen Pulse shockwave
-    const pulse = document.getElementById('pulse-overlay');
-    pulse.classList.remove('pulse-active');
-    void pulse.offsetWidth; // reflow
-    pulse.classList.add('pulse-active');
+    codeInputs.forEach(i => {
+        i.style.color = '#00D4FF';
+        i.style.borderColor = '#00D4FF';
+        i.style.textShadow = '0 0 10px rgba(0, 212, 255, 0.5)';
+    });
+
+    setTimeout(() => {
+        codeInputs.forEach(i => {
+            i.value = '';
+            i.style.color = '';
+            i.style.borderColor = '';
+            i.style.textShadow = '';
+        });
+        checkReceiveReady();
+        codeInputs[0].focus();
+    }, 2000);
 }
 
-function resetRecvFlow() {
-    recvInputState.style.display = 'flex';
-    recvSuccessState.style.display = 'none';
-    inputs[0].focus();
+function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.classList.remove('hidden');
+    // Shake animation
+    receiveZone.style.animation = 'shake 0.4s';
+    setTimeout(() => receiveZone.style.animation = '', 400);
 }
+
+// Add shake animation to stylesheet dynamically
+const style = document.createElement('style');
+style.textContent = `
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+`;
+document.head.appendChild(style);
+
+// Start
+init();
