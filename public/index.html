@@ -1180,12 +1180,13 @@
         // Robust Error Handling
         if (!res.ok) {
           let errorMsg = 'Upload failed';
+          const resClone = res.clone(); // Clone to allow double reading
           try {
             const data = await res.json();
             errorMsg = data.error || errorMsg;
           } catch (e) {
-            // If not JSON, try reading as text
-            const text = await res.text();
+            // Read from clone since original stream is consumed
+            const text = await resClone.text();
             errorMsg = text.substring(0, 100) || errorMsg;
           }
           throw new Error(errorMsg);
@@ -1320,11 +1321,12 @@
         const res = await fetch(`download/${code}`);
         if (!res.ok) {
           let errorMsg = 'Download failed';
+          const resClone = res.clone();
           try {
             const err = await res.json();
             errorMsg = err.error || errorMsg;
           } catch (e) {
-            const text = await res.text();
+            const text = await resClone.text();
             errorMsg = text.substring(0, 100) || errorMsg;
           }
           throw new Error(errorMsg);
