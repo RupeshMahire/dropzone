@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dropzone-18.vercel.app/sitemap.xml

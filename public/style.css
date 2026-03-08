@@ -158,6 +158,26 @@ body {
     text-transform: uppercase;
 }
 
+/* SEO Content Styles */
+.seo-intro {
+    text-align: center;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    padding: 0 15px;
+}
+
+.seo-title {
+    font-size: 1.4rem;
+    color: var(--text-main);
+    margin-bottom: 8px;
+}
+
+.seo-desc {
+    font-size: 0.9rem;
+    margin-top: 0;
+    line-height: 1.4;
+}
+
 /* Toggle Switch */
 .mode-toggle {
     background: var(--surface);
