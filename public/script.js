@@ -26,15 +26,16 @@ const errorMsg = document.getElementById('error-msg');
 const dropZoneUploadState = document.getElementById('send-upload-state');
 const panelSend = document.getElementById('panel-send');
 
-// Supabase Global
-let supabase;
+// Supabase Global Client Instance
+let supabaseClient;
 
 async function initSupabase() {
     try {
         const res = await fetch('/api/config');
         const config = await res.json();
         if (config.supabaseUrl && config.supabaseAnonKey) {
-            supabase = supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+            // Use the global 'supabase' object from the CDN
+            supabaseClient = supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
             console.log("Supabase initialized");
         }
     } catch (err) {
@@ -91,10 +92,10 @@ async function handleFile(file) {
         return;
     }
 
-    if (!supabase) {
-        alert("Supabase not initialized. Please try again.");
+    if (!supabaseClient) {
+        alert("Initializing connection... please wait.");
         await initSupabase();
-        return;
+        if (!supabaseClient) return;
     }
 
     try {
@@ -107,7 +108,7 @@ async function handleFile(file) {
         const filePath = `transfers/${fileName}`;
 
         // 1. Direct Upload to Supabase Storage
-        const { data, error } = await supabase.storage
+        const { data, error } = await supabaseClient.storage
             .from('transfers')
             .upload(filePath, file, {
                 cacheControl: '3600',
@@ -398,4 +399,4 @@ style.textContent = `
 document.head.appendChild(style);
 
 // Start
-init();
+document.addEventListener('DOMContentLoaded', init);
