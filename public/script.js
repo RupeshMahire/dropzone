@@ -1,5 +1,5 @@
 // State
-let isPhoneMode = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
+let isPhoneMode = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 let currentCode = null;
 let currentTimer = null;
 const TTL_SECONDS = 600;
@@ -182,7 +182,10 @@ function setMode(toPhone) {
         panelSend.classList.remove('active');
         receiveZone.classList.add('active');
 
-        if (window.innerWidth > 768 && codeInputs.length > 0) codeInputs[0].focus();
+        // Only auto-focus on non-mobile to avoid keyboard jumping
+        if (window.innerWidth > 768 && codeInputs.length > 0) {
+            setTimeout(() => codeInputs[0].focus(), 50);
+        }
     } else {
         if (btnPc) btnPc.classList.add('active');
         if (btnPcMobile) btnPcMobile.classList.add('active');
@@ -397,6 +400,14 @@ style.textContent = `
 }
 `;
 document.head.appendChild(style);
+
+// Helper to handle mobile 100vh issue
+function handleMobileVH() {
+    let vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+}
+window.addEventListener('resize', handleMobileVH);
+handleMobileVH();
 
 // Start
 document.addEventListener('DOMContentLoaded', init);
