@@ -15,7 +15,6 @@
 
   <!-- External Assets -->
   <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -31,8 +30,8 @@
 
       <!-- Desktop Mode Toggle -->
       <div class="mode-toggle desktop-nav">
-        <button class="toggle-btn btn-send-mode active">SEND</button>
-        <button class="toggle-btn btn-recv-mode">RECEIVE</button>
+        <button id="btn-pc" class="toggle-btn btn-send-mode active">SEND</button>
+        <button id="btn-phone" class="toggle-btn btn-recv-mode">RECEIVE</button>
       </div>
 
       <!-- Mobile Hamburger -->
@@ -45,8 +44,8 @@
       <!-- Mobile Nav Dropdown -->
       <div class="mobile-nav" id="mobile-nav">
         <div class="mode-toggle mobile-toggle-container">
-          <button class="toggle-btn btn-send-mode active">SEND</button>
-          <button class="toggle-btn btn-recv-mode">RECEIVE</button>
+          <button id="btn-pc-mobile" class="toggle-btn btn-send-mode active">SEND</button>
+          <button id="btn-phone-mobile" class="toggle-btn btn-recv-mode">RECEIVE</button>
         </div>
       </div>
     </header>
@@ -82,7 +81,7 @@
       <div id="send-code-state" class="flex-center-col display-none">
         <div class="label">YOUR TRANSFER CODE</div>
 
-        <div class="big-code-container" id="code-boxes">
+        <div class="big-code-container" id="code-display">
           <div class="code-digit"></div>
           <div class="code-digit"></div>
           <div class="code-digit"></div>
@@ -92,13 +91,13 @@
         <div class="countdown-wrapper">
           <svg class="countdown-svg">
             <circle class="countdown-bg" cx="30" cy="30" r="28" />
-            <circle class="countdown-progress" id="countdown-circle" cx="30" cy="30" r="28" />
+            <circle class="countdown-progress" id="time-ring" cx="30" cy="30" r="28" />
           </svg>
-          <div class="countdown-text" id="countdown-text">10:00</div>
+          <div class="countdown-text" id="time-text">10:00</div>
         </div>
 
-        <div class="file-info" id="sent-file-info">filename.jpg (2.4 MB)</div>
-        <div class="instruction">Go to dropzone.app on your phone and enter this code</div>
+        <div class="file-info" id="filename-display">filename.jpg (2.4 MB)</div>
+        <div class="instruction">Enter this code on your other device to receive the file</div>
 
         <button class="btn" onclick="resetSendFlow()">[ Transfer Another ]</button>
 
@@ -121,7 +120,7 @@
           <input type="text" maxlength="1" class="digit-input" id="d4" aria-label="Digit 4" placeholder="-">
         </div>
 
-        <div id="recv-error" class="error-text"></div>
+        <div id="error-msg" class="error-text"></div>
 
         <button class="btn btn-solid" id="btn-receive">RECEIVE FILE</button>
       </div>

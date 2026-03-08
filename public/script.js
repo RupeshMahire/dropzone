@@ -1,11 +1,3 @@
-// --- SUPABASE CONFIGURATION ---
-// Replace these with your actual Supabase project credentials
-const SUPABASE_URL = 'https://ltdnhicqdrkzioyzudri.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0ZG5oaWNxZHJremlveXp1ZHJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4NjUxOTYsImV4cCI6MjA4ODQ0MTE5Nn0.44XwDCrxSeUWb0a9CwaE8QrujrB6TMTH_ZbWpixDoEY';
-
-// Initialize Supabase Client
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 // State
 let isPhoneMode = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
 let currentCode = null;
@@ -16,17 +8,23 @@ const TTL_SECONDS = 600;
 const body = document.body;
 const btnPc = document.getElementById('btn-pc');
 const btnPhone = document.getElementById('btn-phone');
+const btnPcMobile = document.getElementById('btn-pc-mobile');
+const btnPhoneMobile = document.getElementById('btn-phone-mobile');
+const hamburgerBtn = document.getElementById('hamburger-btn');
+const mobileNav = document.getElementById('mobile-nav');
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
-const sendDetails = document.getElementById('send-details');
+const sendDetails = document.getElementById('send-code-state');
 const codeDisplay = document.getElementById('code-display');
 const filenameDisplay = document.getElementById('filename-display');
 const timeRing = document.getElementById('time-ring');
 const timeText = document.getElementById('time-text');
-const receiveZone = document.getElementById('receive-zone');
-const codeInputs = document.querySelectorAll('.code-input input');
+const receiveZone = document.getElementById('panel-recv');
+const codeInputs = document.querySelectorAll('.digit-input');
 const btnReceive = document.getElementById('btn-receive');
 const errorMsg = document.getElementById('error-msg');
+const dropZoneUploadState = document.getElementById('send-upload-state');
+const panelSend = document.getElementById('panel-send');
 
 // Initialization
 function init() {
@@ -34,8 +32,14 @@ function init() {
     setMode(isPhoneMode);
 
     // Event Listeners
-    btnPc.addEventListener('click', () => setMode(false));
-    btnPhone.addEventListener('click', () => setMode(true));
+    if (btnPc) btnPc.addEventListener('click', () => setMode(false));
+    if (btnPhone) btnPhone.addEventListener('click', () => setMode(true));
+    if (btnPcMobile) btnPcMobile.addEventListener('click', () => { setMode(false); toggleMobileNav(false); });
+    if (btnPhoneMobile) btnPhoneMobile.addEventListener('click', () => { setMode(true); toggleMobileNav(false); });
+
+    if (hamburgerBtn) {
+        hamburgerBtn.addEventListener('click', () => toggleMobileNav());
+    }
 
     // Upload Listeners
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--text-glow)'; });
@@ -54,6 +58,14 @@ function init() {
     });
     btnReceive.addEventListener('click', triggerReceive);
 }
+
+function toggleMobileNav(force) {
+    if (!mobileNav || !hamburgerBtn) return;
+    const isOpen = force !== undefined ? force : !mobileNav.classList.contains('active');
+    mobileNav.classList.toggle('active', isOpen);
+    hamburgerBtn.classList.toggle('active', isOpen);
+}
+
 
 // Visuals
 function createParticles() {
@@ -75,34 +87,42 @@ function createParticles() {
 function setMode(toPhone) {
     isPhoneMode = toPhone;
     if (isPhoneMode) {
-        btnPhone.classList.add('active');
-        btnPc.classList.remove('active');
-        dropZone.classList.add('hidden');
-        sendDetails.classList.add('hidden');
-        receiveZone.classList.remove('hidden');
-        // Focus first input on phone mode if not mobile (prevents keyboard pop on actual mobile)
-        if (window.innerWidth > 768) codeInputs[0].focus();
+        if (btnPhone) btnPhone.classList.add('active');
+        if (btnPhoneMobile) btnPhoneMobile.classList.add('active');
+        if (btnPc) btnPc.classList.remove('active');
+        if (btnPcMobile) btnPcMobile.classList.remove('active');
+
+        panelSend.classList.remove('active');
+        receiveZone.classList.add('active');
+
+        if (window.innerWidth > 768 && codeInputs.length > 0) codeInputs[0].focus();
     } else {
-        btnPc.classList.add('active');
-        btnPhone.classList.remove('active');
-        receiveZone.classList.add('hidden');
-        if (currentCode) {
-            sendDetails.classList.remove('hidden');
-        } else {
-            dropZone.classList.remove('hidden');
-        }
+        if (btnPc) btnPc.classList.add('active');
+        if (btnPcMobile) btnPcMobile.classList.add('active');
+        if (btnPhone) btnPhone.classList.remove('active');
+        if (btnPhoneMobile) btnPhoneMobile.classList.remove('active');
+
+        receiveZone.classList.remove('active');
+        panelSend.classList.add('active');
     }
     errorMsg.classList.add('hidden');
 }
 
-// Generate 4 digit collision resistant code
-function generateCode() {
-    const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-    let code = '';
-    for (let i = 0; i < 4; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
+function resetSendFlow() {
+    currentCode = null;
+    if (currentTimer) clearInterval(currentTimer);
+    sendDetails.classList.add('display-none');
+    dropZoneUploadState.classList.remove('display-none');
+    dropZone.classList.remove('hidden');
+    fileInput.value = '';
+}
+
+function resetRecvFlow() {
+    document.getElementById('recv-success-state').classList.add('display-none');
+    document.getElementById('recv-input-state').classList.remove('display-none');
+    codeInputs.forEach(i => i.value = '');
+    checkReceiveReady();
+    if (codeInputs.length > 0) codeInputs[0].focus();
 }
 
 // --- CORE LOGIC: SUPABASE UPLOAD ---
@@ -120,46 +140,35 @@ async function handleFile(file) {
         return;
     }
 
-    if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
-        alert("Supabase is not configured! Please set your URL and ANON_KEY in script.js");
-        return;
-    }
-
     try {
         // Show loading state
         const iconSvg = dropZone.querySelector('.icon-circle svg');
         iconSvg.style.animation = 'float-particle 1s infinite alternate';
 
-        const code = generateCode();
-        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
-        const filePath = `${code}-${Math.random().toString(36).substring(7)}-${safeName}`;
+        const formData = new FormData();
+        formData.append('file', file);
 
-        // 1. Upload file to Supabase Storage (Bucket name: 'dropzone')
-        const { data: storageData, error: storageError } = await supabase.storage
-            .from('dropzone')
-            .upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
 
-        if (storageError) throw new Error("Storage Upload Failed: " + storageError.message);
+        const contentType = response.headers.get("content-type");
+        if (!response.ok) {
+            let errorMessage = "Upload failed";
+            if (contentType && contentType.includes("application/json")) {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
 
-        // 2. Insert metadata into Supabase Database (Table: 'files')
-        const expiresAt = new Date(Date.now() + TTL_SECONDS * 1000).toISOString();
-        const { error: dbError } = await supabase
-            .from('files')
-            .insert([
-                {
-                    code: code,
-                    file_path: filePath,
-                    filename: file.name,
-                    expires_at: expiresAt
-                }
-            ]);
-
-        if (dbError) throw new Error("Database Logic Failed: " + dbError.message);
-
-        showUploadSuccess(code, file.name, file.size, TTL_SECONDS);
+        if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            showUploadSuccess(data.code, data.filename, data.size, data.expires);
+        } else {
+            throw new Error("Invalid server response format");
+        }
 
     } catch (err) {
         alert("Upload error: " + err.message);
@@ -170,8 +179,8 @@ async function handleFile(file) {
 
 function showUploadSuccess(code, filename, size, startTtl) {
     currentCode = code;
-    dropZone.classList.add('hidden');
-    sendDetails.classList.remove('hidden');
+    dropZoneUploadState.classList.add('display-none');
+    sendDetails.classList.remove('display-none');
 
     // Staggered animation for code digits
     codeDisplay.innerHTML = '';
@@ -263,54 +272,36 @@ async function triggerReceive() {
     const code = Array.from(codeInputs).map(i => i.value).join('');
     if (code.length !== 4) return;
 
-    if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
-        showError("Supabase is not configured yet.");
-        return;
-    }
-
     errorMsg.classList.add('hidden');
     btnReceive.textContent = 'CONNECTING...';
     btnReceive.disabled = true;
 
     try {
-        // 1. Fetch metadata from Supabase database
-        const { data: fileRecords, error: dbError } = await supabase
-            .from('files')
-            .select('*')
-            .eq('code', code);
+        // 1. Check status first (optional but good for UX)
+        const statusRes = await fetch(`/api/status/${code}`);
+        const statusContentType = statusRes.headers.get("content-type");
 
-        if (dbError) throw new Error(dbError.message);
-        if (!fileRecords || fileRecords.length === 0) throw new Error("Code not found or expired.");
-
-        const record = fileRecords[0];
-
-        // 2. Check if expired
-        if (new Date(record.expires_at) < new Date()) {
-            throw new Error("This code has expired.");
+        if (!statusRes.ok) {
+            let errorMessage = "Invalid code";
+            if (statusContentType && statusContentType.includes("application/json")) {
+                const err = await statusRes.json();
+                errorMessage = err.error || errorMessage;
+            }
+            throw new Error(errorMessage);
         }
 
-        // 3. Download from Supabase Storage using signed URL
-        const { data: urlData, error: urlError } = await supabase.storage
-            .from('dropzone')
-            .createSignedUrl(record.file_path, 60, {
-                download: record.filename
-            });
+        // 2. Trigger download via backend endpoint
+        // Using window.location.href or a temporary link to the download endpoint
+        const downloadUrl = `/api/download/${code}`;
 
-        if (urlError) throw new Error("Failed to generate download link.");
-
-        // Trigger the file download in the browser
         const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = urlData.signedUrl;
+        a.href = downloadUrl;
+        // The backend sets Content-Disposition, but we can hint it here
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
 
         showReceiveSuccess();
-
-        // 4. (Optional) Cleanup: Delete the record so it's a one-time download
-        await supabase.from('files').delete().eq('code', code);
-        await supabase.storage.from('dropzone').remove([record.file_path]);
 
     } catch (err) {
         showError(err.message);
