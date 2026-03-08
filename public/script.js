@@ -26,10 +26,27 @@ const errorMsg = document.getElementById('error-msg');
 const dropZoneUploadState = document.getElementById('send-upload-state');
 const panelSend = document.getElementById('panel-send');
 
+// Supabase Global
+let supabase;
+
+async function initSupabase() {
+    try {
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        if (config.supabaseUrl && config.supabaseAnonKey) {
+            supabase = supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+            console.log("Supabase initialized");
+        }
+    } catch (err) {
+        console.error("Supabase Init Error:", err);
+    }
+}
+
 // Initialization
-function init() {
+async function init() {
     createParticles();
     setMode(isPhoneMode);
+    await initSupabase();
 
     // Event Listeners
     if (btnPc) btnPc.addEventListener('click', () => setMode(false));
@@ -57,6 +74,75 @@ function init() {
         input.addEventListener('paste', handleCodePaste);
     });
     btnReceive.addEventListener('click', triggerReceive);
+}
+
+function generateSafeCode() {
+    const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 4; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
+
+async function handleFile(file) {
+    if (file.size > 50 * 1024 * 1024) {
+        alert("File extremely large. Max 50MB.");
+        return;
+    }
+
+    if (!supabase) {
+        alert("Supabase not initialized. Please try again.");
+        await initSupabase();
+        return;
+    }
+
+    try {
+        const iconSvg = dropZone.querySelector('.icon-circle svg');
+        if (iconSvg) iconSvg.style.animation = 'float-particle 1s infinite alternate';
+
+        const fileCode = generateSafeCode();
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${fileCode}-${Date.now()}.${fileExt}`;
+        const filePath = `transfers/${fileName}`;
+
+        // 1. Direct Upload to Supabase Storage
+        const { data, error } = await supabase.storage
+            .from('transfers')
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+
+        if (error) throw error;
+
+        // 2. Register Metadata with Backend
+        const metadataRes = await fetch('/api/upload-metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: fileCode,
+                filename: file.name,
+                mimetype: file.type,
+                size: file.size,
+                file_path: filePath
+            })
+        });
+
+        if (!metadataRes.ok) {
+            const errData = await metadataRes.json();
+            throw new Error(errData.error || "Failed to register transfer");
+        }
+
+        const metadata = await metadataRes.json();
+        showUploadSuccess(metadata.code, file.name, file.size, metadata.expires);
+
+    } catch (err) {
+        console.error("Upload Error:", err);
+        alert("Upload error: " + (err.message || "Unknown error"));
+        const iconSvg = dropZone.querySelector('.icon-circle svg');
+        if (iconSvg) iconSvg.style.animation = 'none';
+    }
 }
 
 function toggleMobileNav(force) {
@@ -118,8 +204,10 @@ function resetSendFlow() {
 }
 
 function resetRecvFlow() {
-    document.getElementById('recv-success-state').classList.add('display-none');
-    document.getElementById('recv-input-state').classList.remove('display-none');
+    const successResult = document.getElementById('recv-success-state');
+    if (successResult) successResult.classList.add('display-none');
+    const inputState = document.getElementById('recv-input-state');
+    if (inputState) inputState.classList.remove('display-none');
     codeInputs.forEach(i => i.value = '');
     checkReceiveReady();
     if (codeInputs.length > 0) codeInputs[0].focus();
@@ -131,49 +219,6 @@ function handleDrop(e) {
     dropZone.style.borderColor = 'rgba(255, 255, 255, 0.2)';
     if (e.dataTransfer.files.length > 0) {
         handleFile(e.dataTransfer.files[0]);
-    }
-}
-
-async function handleFile(file) {
-    if (file.size > 50 * 1024 * 1024) {
-        alert("File extremely large. Max 50MB.");
-        return;
-    }
-
-    try {
-        // Show loading state
-        const iconSvg = dropZone.querySelector('.icon-circle svg');
-        iconSvg.style.animation = 'float-particle 1s infinite alternate';
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData
-        });
-
-        const contentType = response.headers.get("content-type");
-        if (!response.ok) {
-            let errorMessage = "Upload failed";
-            if (contentType && contentType.includes("application/json")) {
-                const errorData = await response.json();
-                errorMessage = errorData.error || errorMessage;
-            }
-            throw new Error(errorMessage);
-        }
-
-        if (contentType && contentType.includes("application/json")) {
-            const data = await response.json();
-            showUploadSuccess(data.code, data.filename, data.size, data.expires);
-        } else {
-            throw new Error("Invalid server response format");
-        }
-
-    } catch (err) {
-        alert("Upload error: " + err.message);
-        const iconSvg = dropZone.querySelector('.icon-circle svg');
-        iconSvg.style.animation = 'none';
     }
 }
 
